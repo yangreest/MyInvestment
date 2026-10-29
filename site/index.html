@@ -54,6 +54,7 @@
             <option>纯债基金</option>
             <option>货币基金</option>
             <option>黄金基金</option>
+            <option>纸黄金</option>
             <option>其他</option>
           </select>
         </div>
@@ -71,8 +72,8 @@
           <input type="number" id="fAmount" step="0.01" min="0" placeholder="如：560" required>
         </div>
         <div class="field">
-          <label>持仓份额(份)</label>
-          <input type="number" id="fShares" step="0.01" min="0" placeholder="基金APP查询，用于实时估值">
+          <label>持仓份额(份/克)</label>
+          <input type="number" id="fShares" step="0.01" min="0" placeholder="基金填份，纸黄金填克数">
         </div>
         <div class="field">
           <label>当前市值(元)</label>
@@ -111,7 +112,7 @@
             <tr>
               <th>日期</th><th>标的类型</th><th>标的名称</th><th>基金代码</th>
               <th class="num">当月投入(元)</th><th class="num">累计总投入(元)</th>
-              <th class="num">持仓份额(份)</th><th class="num">当前市值(元)</th>
+              <th class="num">持仓份额(份/克)</th><th class="num">当前市值(元)</th>
               <th class="num">实时估值涨跌</th>
               <th class="num">持仓盈亏(元)</th><th class="num">盈亏比例</th>
               <th class="num">目标占比</th><th class="num">实际占比</th>
@@ -122,7 +123,7 @@
         </table>
       </div>
       <div class="empty-tip" id="recordsEmpty" style="display:none">暂无记录，请在上方表单添加，或到「数据管理」载入示例数据</div>
-      <p class="hint">💡 实时估值来自天天基金公开接口：交易时段内为实时估算净值，非交易时段为最新确认净值（鼠标悬停涨跌幅可查看），仅供参考；货币基金无净值估值，市值仍需手填。填了「持仓份额」的标的会自动更新市值，未填份额的仅展示估值涨跌。</p>
+      <p class="hint">💡 实时估值来自天天基金公开接口：交易时段内为实时估算净值，非交易时段为最新确认净值（鼠标悬停涨跌幅可查看），仅供参考；货币基金无净值估值，市值仍需手填。填了「持仓份额」的标的会自动更新市值，未填份额的仅展示估值涨跌。<br>🥇 纸黄金：份额填银行 APP 里的克数，刷新时按上金所 Au99.99 实时金价（元/克）自动计算市值，与银行报价可能略有价差。</p>
     </div>
   </section>
 
@@ -153,7 +154,7 @@
           <tr>
             <th>统计年份</th><th class="num">全年投入总额</th><th class="num">年末组合总市值</th>
             <th class="num">年度盈亏</th><th class="num">年度收益率</th>
-            <th class="num">权益总市值</th><th class="num">债券总市值</th><th class="num">现金总市值</th>
+            <th class="num">权益总市值</th><th class="num">债券总市值</th><th class="num">现金总市值</th><th class="num">黄金总市值</th>
             <th>是否完成再平衡</th><th>操作</th>
           </tr>
         </thead>

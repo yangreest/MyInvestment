@@ -41,9 +41,10 @@ function assetClass(type) {
   if (type === "宽基指数" || type === "行业指数") return "权益";
   if (type === "纯债基金") return "债券";
   if (type === "货币基金") return "现金";
+  if (type === "纸黄金") return "黄金";
   return "其他";
 }
-const CLASS_COLOR = { "权益": "#2f6fed", "债券": "#12a05c", "现金": "#e8a33d", "其他": "#8a6fd1" };
+const CLASS_COLOR = { "权益": "#2f6fed", "债券": "#12a05c", "现金": "#e8a33d", "黄金": "#d4a017", "其他": "#8a6fd1" };
 
 /* ---------- 实时估值（天天基金，经 server.py 代理） ---------- */
 let estimates = {};   // 基金代码 -> {name, gsz, gszzl, gztime}
@@ -60,26 +61,59 @@ async function fetchEst(code) {
   } finally { clearTimeout(timer); }
 }
 
+async function fetchGold() {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);
+  try {
+    const resp = await fetch("/api/gold", { signal: ctrl.signal });
+    const data = await resp.json();
+    return data.ok ? data : null;
+  } catch (e) {
+    return null;
+  } finally { clearTimeout(timer); }
+}
+
 async function refreshEstimates() {
   const btn = $("btnRefreshEst");
-  // 每个标的取最新一条记录，去重基金代码
+  // 每个标的取最新一条记录；基金需有代码，纸黄金无需代码
   const c = computeAll();
-  const targets = c.holdings.filter(h => {
-    const recs = db.records.filter(r => r.name === h.name && r.code);
-    return recs.length > 0;
-  }).map(h => {
-    const latestRec = db.records.filter(r => r.name === h.name && r.code)
-      .sort((a, b) => a.date.localeCompare(b.date)).pop();
-    return { name: h.name, type: h.type, code: latestRec.code, recId: latestRec.id, shares: latestRec.shares };
-  });
-  const uniq = [...new Map(targets.map(t => [t.code, t])).values()];
+  const targets = c.holdings.map(h => {
+    const recs = db.records.filter(r => r.name === h.name)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const latestRec = recs[recs.length - 1];
+    return { name: h.name, type: h.type, code: latestRec.code || "", recId: latestRec.id, shares: latestRec.shares };
+  }).filter(t => t.code || assetClass(t.type) === "黄金");
 
-  if (!uniq.length) { toast("没有可刷新的标的：请先在记录中填写 6 位基金代码"); return; }
+  if (!targets.length) { toast("没有可刷新的标的：请先填写 6 位基金代码（纸黄金无需代码）"); return; }
 
   btn.disabled = true;
   btn.textContent = "⏳ 获取中…";
-  let updated = 0, failed = 0, skipped = [];
-  for (const t of uniq) {
+  let updated = 0, failed = 0;
+  const skipped = [];
+
+  // 纸黄金：上金所实时金价，市值 = 克数 × 金价
+  const goldTargets = targets.filter(t => assetClass(t.type) === "黄金");
+  if (goldTargets.length) {
+    const gold = await fetchGold();
+    if (gold) {
+      estimates["GOLD"] = { ...gold, gsz: gold.price, mode: "实时金价" };
+      goldTargets.forEach(t => {
+        if (t.shares && Number(t.shares) > 0) {
+          const rec = db.records.find(r => r.id === t.recId);
+          if (rec) { rec.mv = Math.round(Number(t.shares) * gold.price * 100) / 100; updated++; }
+        } else {
+          skipped.push(t.name + "(未填克数，仅展示金价涨跌)");
+        }
+      });
+    } else {
+      failed += goldTargets.length;
+      skipped.push("金价获取失败");
+    }
+  }
+
+  // 基金：按代码去重后逐个查估值
+  const fundTargets = [...new Map(targets.filter(t => t.code).map(t => [t.code, t])).values()];
+  for (const t of fundTargets) {
     if (assetClass(t.type) === "现金") { skipped.push(t.name + "(货币基金无估值)"); continue; }
     const est = await fetchEst(t.code);
     if (!est || !est.gsz) { failed++; skipped.push(t.name + "(" + t.code + " 获取失败)"); continue; }
@@ -90,6 +124,7 @@ async function refreshEstimates() {
       if (rec) { rec.mv = Math.round(Number(t.shares) * Number(est.gsz) * 100) / 100; updated++; }
     }
   }
+
   btn.disabled = false;
   btn.textContent = "🔄 刷新实时估值";
   if (updated > 0) save();
@@ -158,7 +193,7 @@ function renderRatio(c) {
     clsMap[h.cls].actual += h.actualPct;
     clsMap[h.cls].target += (h.target || 0) / 100;
   });
-  const order = ["权益", "债券", "现金", "其他"].filter(k => clsMap[k]);
+  const order = ["权益", "债券", "现金", "黄金", "其他"].filter(k => clsMap[k]);
   box.innerHTML = order.map(k => {
     const v = clsMap[k], color = CLASS_COLOR[k];
     const aw = Math.min(100, v.actual * 100), tw = Math.min(100, v.target * 100);
@@ -206,14 +241,15 @@ function renderRecordTable(c) {
     const h = c.latest[r.name];
     const actualPct = (h && h.mv != null && c.totalMv > 0 && (!mv || h.date === r.date)) ? h.actualPct : null;
     const pnlCls = pnl == null ? "" : (pnl >= 0 ? "pos" : "neg");
-    // 实时估值（仅在该标的最新一条记录上展示）
-    const est = estimates[r.code || ""];
+    // 实时估值（仅在该标的最新一条记录上展示；纸黄金用上金所金价）
+    const isGold = assetClass(r.type) === "黄金";
+    const est = isGold ? estimates["GOLD"] : estimates[r.code || ""];
     const isLatestRow = h && h.date === r.date;
-    const estCell = (r.code && est && isLatestRow)
-      ? `<span class="${Number(est.gszzl) >= 0 ? "pos" : "neg"}" title="${est.mode}净值 ${est.gsz}（${est.gztime}）">${Number(est.gszzl) >= 0 ? "+" : ""}${est.gszzl}%</span>`
+    const estCell = (est && (r.code || isGold) && isLatestRow)
+      ? `<span class="${Number(est.gszzl) >= 0 ? "pos" : "neg"}" title="${est.mode} ${est.gsz}${isGold ? " 元/克" : ""}（${est.gztime}）">${Number(est.gszzl) >= 0 ? "+" : ""}${est.gszzl}%</span>`
       : "—";
-    const sharesCell = (r.code && isLatestRow)
-      ? `<input type="number" class="shares-input" data-id="${r.id}" step="0.01" min="0" value="${r.shares ?? ""}" placeholder="份额">`
+    const sharesCell = ((r.code || isGold) && isLatestRow)
+      ? `<input type="number" class="shares-input" data-id="${r.id}" step="0.01" min="0" value="${r.shares ?? ""}" placeholder="${isGold ? "克数" : "份额"}">`
       : (r.shares === "" || r.shares == null ? "—" : fmt(Number(r.shares)));
     return `<tr data-id="${r.id}">
       <td>${r.date}</td>
@@ -272,7 +308,7 @@ function renderYearly(c) {
     const base = prevMv + yearIn;
     const rate = base === 0 ? 0 : yearPnl / base;
     // 分类市值
-    const cls = { "权益": 0, "债券": 0, "现金": 0, "其他": 0 };
+    const cls = { "权益": 0, "债券": 0, "现金": 0, "黄金": 0, "其他": 0 };
     yearEndRecs.forEach(r => cls[assetClass(r.type)] += Number(r.mv));
     const meta = db.yearly.find(x => Number(x.year) === y) || {};
     const pnlCls = yearPnl >= 0 ? "pos" : "neg";
@@ -285,6 +321,7 @@ function renderYearly(c) {
       <td class="num">${fmt(cls["权益"])}</td>
       <td class="num">${fmt(cls["债券"])}</td>
       <td class="num">${fmt(cls["现金"] + cls["其他"])}</td>
+      <td class="num">${fmt(cls["黄金"])}</td>
       <td>${meta.rebalance || "未记录"}</td>
       <td>
         <button class="op-btn" data-act="yedit">编辑</button>
@@ -526,6 +563,7 @@ $("btnLoadSample").addEventListener("click", () => {
       { id: uid(), date: t, type: "宽基指数", name: "沪深300联接A", code: "110020", amount: 560, shares: "", mv: 528, target: 20, note: "PE分位42%，正常定投" },
       { id: uid(), date: t, type: "纯债基金", name: "XX纯债", code: "", amount: 1960, shares: "", mv: 2530, target: 70, note: "无操作" },
       { id: uid(), date: t, type: "货币基金", name: "XX货基", code: "", amount: 280, shares: "", mv: 280, target: 10, note: "备用弹药" },
+      { id: uid(), date: t, type: "纸黄金", name: "工行纸黄金", code: "", amount: 500, shares: "", mv: 500, target: 5, note: "份额填克数，刷新自动按金价算市值" },
     ],
     yearly: [], alert: defaultAlert(),
   };
