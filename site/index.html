@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的定投记录</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <h1>📈 我的定投记录</h1>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-tab="records">定投记录</button>
+      <button class="tab" data-tab="yearly">年度汇总</button>
+      <button class="tab" data-tab="alert">止盈提醒</button>
+      <button class="tab" data-tab="data">数据管理</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ============ 定投记录 ============ -->
+  <section id="panel-records" class="panel active">
+    <!-- 总览卡片 -->
+    <div class="cards" id="overviewCards">
+      <div class="card"><div class="card-label">累计总投入</div><div class="card-value" id="ovTotalIn">¥0.00</div></div>
+      <div class="card"><div class="card-label">当前总市值</div><div class="card-value" id="ovTotalMv">¥0.00</div></div>
+      <div class="card"><div class="card-label">持仓盈亏</div><div class="card-value" id="ovTotalPnl">¥0.00</div></div>
+      <div class="card"><div class="card-label">盈亏比例</div><div class="card-value" id="ovTotalPct">0.00%</div></div>
+    </div>
+
+    <!-- 股债占比对比 -->
+    <div class="ratio-box">
+      <div class="ratio-title">股债占比（目标 vs 实际）</div>
+      <div id="ratioBars"></div>
+    </div>
+
+    <!-- 录入表单 -->
+    <div class="form-box">
+      <div class="form-title" id="formTitle">➕ 新增记录</div>
+      <form id="recordForm" class="record-form" autocomplete="off">
+        <input type="hidden" id="editId">
+        <div class="field">
+          <label>日期 <span class="req">*</span></label>
+          <input type="date" id="fDate" required>
+        </div>
+        <div class="field">
+          <label>标的类型 <span class="req">*</span></label>
+          <select id="fType" required>
+            <option value="">请选择</option>
+            <option>宽基指数</option>
+            <option>行业指数</option>
+            <option>纯债基金</option>
+            <option>货币基金</option>
+            <option>黄金基金</option>
+            <option>其他</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>标的名称 <span class="req">*</span></label>
+          <input type="text" id="fName" placeholder="如：沪深300联接A" required list="nameList">
+          <datalist id="nameList"></datalist>
+        </div>
+        <div class="field">
+          <label>基金代码</label>
+          <input type="text" id="fCode" pattern="\d{6}" maxlength="6" placeholder="6位代码，如：110020">
+        </div>
+        <div class="field">
+          <label>当月投入金额(元) <span class="req">*</span></label>
+          <input type="number" id="fAmount" step="0.01" min="0" placeholder="如：560" required>
+        </div>
+        <div class="field">
+          <label>持仓份额(份)</label>
+          <input type="number" id="fShares" step="0.01" min="0" placeholder="基金APP查询，用于实时估值">
+        </div>
+        <div class="field">
+          <label>当前市值(元)</label>
+          <input type="number" id="fMv" step="0.01" min="0" placeholder="手填或点「刷新实时估值」自动更新">
+        </div>
+        <div class="field">
+          <label>目标占比(%)</label>
+          <input type="number" id="fTarget" step="0.1" min="0" max="100" placeholder="如：20">
+        </div>
+        <div class="field field-wide">
+          <label>备注（估值/操作记录）</label>
+          <input type="text" id="fNote" placeholder="如：PE分位42%，正常定投">
+        </div>
+        <div class="field field-btns">
+          <button type="submit" class="btn primary" id="btnSave">保存记录</button>
+          <button type="button" class="btn" id="btnCancelEdit" style="display:none">取消编辑</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- 筛选 + 表格 -->
+    <div class="table-box">
+      <div class="table-toolbar">
+        <div class="filters">
+          <select id="filterType"><option value="">全部类型</option></select>
+          <select id="filterName"><option value="">全部标的</option></select>
+          <select id="filterYear"><option value="">全部年份</option></select>
+          <button class="btn primary" id="btnRefreshEst" title="从天天基金获取最新估值，自动更新市值和盈亏">🔄 刷新实时估值</button>
+          <span class="est-time" id="estTime"></span>
+        </div>
+        <span class="record-count" id="recordCount"></span>
+      </div>
+      <div class="table-scroll">
+        <table id="recordTable">
+          <thead>
+            <tr>
+              <th>日期</th><th>标的类型</th><th>标的名称</th><th>基金代码</th>
+              <th class="num">当月投入(元)</th><th class="num">累计总投入(元)</th>
+              <th class="num">持仓份额(份)</th><th class="num">当前市值(元)</th>
+              <th class="num">实时估值涨跌</th>
+              <th class="num">持仓盈亏(元)</th><th class="num">盈亏比例</th>
+              <th class="num">目标占比</th><th class="num">实际占比</th>
+              <th>备注</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="recordTbody"></tbody>
+        </table>
+      </div>
+      <div class="empty-tip" id="recordsEmpty" style="display:none">暂无记录，请在上方表单添加，或到「数据管理」载入示例数据</div>
+      <p class="hint">💡 实时估值来自天天基金公开接口：交易时段内为实时估算净值，非交易时段为最新确认净值（鼠标悬停涨跌幅可查看），仅供参考；货币基金无净值估值，市值仍需手填。填了「持仓份额」的标的会自动更新市值，未填份额的仅展示估值涨跌。</p>
+    </div>
+  </section>
+
+  <!-- ============ 年度汇总 ============ -->
+  <section id="panel-yearly" class="panel">
+    <div class="form-box">
+      <div class="form-title" id="yearlyFormTitle">➕ 补充/编辑年度汇总</div>
+      <form id="yearlyForm" class="record-form" autocomplete="off">
+        <input type="hidden" id="yEditId">
+        <div class="field">
+          <label>统计年份 <span class="req">*</span></label>
+          <input type="number" id="yYear" min="2000" max="2100" step="1" required>
+        </div>
+        <div class="field">
+          <label>是否完成再平衡</label>
+          <select id="yRebalance"><option value="">未记录</option><option value="是">是</option><option value="否">否</option></select>
+        </div>
+        <div class="field field-btns">
+          <button type="submit" class="btn primary" id="btnSaveYearly">保存年度</button>
+          <button type="button" class="btn" id="btnCancelYearlyEdit" style="display:none">取消编辑</button>
+        </div>
+      </form>
+      <p class="hint">💡 全年投入总额、年末市值、年度盈亏、收益率、各类市值均由定投记录自动计算，无需手填。</p>
+    </div>
+    <div class="table-scroll">
+      <table id="yearlyTable">
+        <thead>
+          <tr>
+            <th>统计年份</th><th class="num">全年投入总额</th><th class="num">年末组合总市值</th>
+            <th class="num">年度盈亏</th><th class="num">年度收益率</th>
+            <th class="num">权益总市值</th><th class="num">债券总市值</th><th class="num">现金总市值</th>
+            <th>是否完成再平衡</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="yearlyTbody"></tbody>
+      </table>
+    </div>
+    <div class="empty-tip" id="yearlyEmpty" style="display:none">暂无年度数据，添加定投记录后自动生成</div>
+  </section>
+
+  <!-- ============ 止盈提醒 ============ -->
+  <section id="panel-alert" class="panel">
+    <div class="alert-banner" id="alertBanner">计算中…</div>
+    <div class="form-box">
+      <div class="form-title">⚙️ 止盈计划设置</div>
+      <form id="alertForm" class="record-form" autocomplete="off">
+        <div class="field">
+          <label>组合目标年化(%)</label>
+          <input type="number" id="aTarget" step="0.1" value="8">
+        </div>
+        <div class="field">
+          <label>计划卖出比例(%)</label>
+          <input type="number" id="aSellPct" step="1" min="0" max="100" value="25">
+        </div>
+        <div class="field">
+          <label>卖出后资金去向</label>
+          <input type="text" id="aDest" value="转入纯债">
+        </div>
+        <div class="field">
+          <label>完成时间</label>
+          <input type="date" id="aDoneDate">
+        </div>
+        <div class="field">
+          <label>本次是否已执行止盈</label>
+          <select id="aExecuted"><option value="否">否</option><option value="是">是</option></select>
+        </div>
+        <div class="field field-btns">
+          <button type="submit" class="btn primary">保存设置</button>
+        </div>
+      </form>
+    </div>
+    <div class="table-box">
+      <div class="form-title">📋 止盈提醒辅助表</div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>组合目标年化</th><th>当前年化收益</th><th>触发止盈？</th><th>计划卖出比例</th><th>卖出后资金去向</th><th>完成时间</th></tr>
+          </thead>
+          <tbody id="alertTbody"></tbody>
+        </table>
+      </div>
+      <p class="hint">💡 当前年化收益按「持仓盈亏 ÷ 累计投入 × 365 ÷ 首笔记录至今天数」简单估算，仅供参考。</p>
+    </div>
+  </section>
+
+  <!-- ============ 数据管理 ============ -->
+  <section id="panel-data" class="panel">
+    <div class="data-grid">
+      <div class="form-box">
+        <div class="form-title">📤 导出数据</div>
+        <p class="hint">备份全部数据，或导出 CSV 粘贴到 Excel（自动分列）。</p>
+        <div class="btn-row">
+          <button class="btn primary" id="btnExportJson">导出 JSON 备份</button>
+          <button class="btn" id="btnExportCsv">导出 CSV（Excel用）</button>
+        </div>
+      </div>
+      <div class="form-box">
+        <div class="form-title">📥 导入数据</div>
+        <p class="hint">选择之前导出的 JSON 备份文件，导入将覆盖当前全部数据。</p>
+        <input type="file" id="importFile" accept=".json,application/json" class="file-input">
+      </div>
+      <div class="form-box">
+        <div class="form-title">🧪 示例数据</div>
+        <p class="hint">载入文档中的三条示例记录，快速体验功能（会覆盖现有数据）。</p>
+        <button class="btn" id="btnLoadSample">载入示例数据</button>
+      </div>
+      <div class="form-box danger-zone">
+        <div class="form-title">🗑️ 清空数据</div>
+        <p class="hint">删除本机浏览器中保存的全部投资数据，不可恢复。</p>
+        <button class="btn danger" id="btnClear">清空全部数据</button>
+      </div>
+    </div>
+    <p class="hint storage-tip">💾 所有数据仅保存在当前浏览器 localStorage 中，不会上传网络（实时估值仅查询行情，不涉及你的数据）；换设备前请先导出备份。<br>🚀 启动方式：在 site 目录执行 <code>python server.py</code>，然后访问 http://localhost:8080（需通过此服务启动，实时估值代理才可用）。</p>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>
